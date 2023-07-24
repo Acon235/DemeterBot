@@ -23,7 +23,7 @@ def lightOn(lightPin, logfile):
 	# turn lights on, log on file, update suntimes for tomorrow
 	gpio.output(lightPin, gpio.HIGH)
 	with open(logfile, "a") as file1:
-		nowTime = nowTime = datetime.datetime.now()
+		nowTime = datetime.datetime.now()
 		timeStr = str(nowTime)
 		file1.write(f"Lights turned on at {timeStr} \n")
 
@@ -32,7 +32,7 @@ def lightOff(lightPin, logfile):
 	# turn lights off, log on file
 	gpio.output(lightPin, gpio.LOW)
 	with open(logfile, "a") as file1:
-		nowTime = nowTime = datetime.datetime.now()
+		nowTime = datetime.datetime.now()
 		timeStr = str(nowTime)
 		file1.write(f"Lights turned off at {timeStr} \n")
 
@@ -51,7 +51,7 @@ def lightScheduleUpdate(sun, lightPin, timeZone, logfile):
 	lightOffJob = schedule.every().day.at(f"{lightOffTime.hour:02}:{lightOffTime.minute:02}").do(lightOff, lightPin, logfile).tag("light_task")
 	
 	with open(logfile, "a") as file1:
-		nowTime = nowTime = datetime.datetime.now()
+		nowTime = datetime.datetime.now()
 		timeStr = str(nowTime)
 		file1.write(f"Sun times updated at {timeStr} \n")
 
@@ -63,7 +63,7 @@ def pumpOn(pumpOnInterval, waterPin, logfile):
 	
 	gpio.output(waterPin, gpio.HIGH)
 	with open(logfile, "a") as file1:
-		nowTime = nowTime = datetime.datetime.now()
+		nowTime = datetime.datetime.now()
 		timeStr = str(nowTime)
 		file1.write(f"Pump turned on at {timeStr} \n")
 
@@ -72,7 +72,7 @@ def pumpOff(waterPin, logfile):
 	
 	gpio.output(waterPin, gpio.LOW)
 	with open(logfile, "a") as file1:
-		nowTime = nowTime = datetime.datetime.now()
+		nowTime = datetime.datetime.now()
 		timeStr = str(nowTime)
 		file1.write(f"Pump turned off at {timeStr} \n")
 
