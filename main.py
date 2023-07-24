@@ -109,7 +109,7 @@ def startup(lightPin, lightOnTime, lightOffTime, logfile):
 def measurements(logfile):
 	# do temp, ph, ec measurements and log
 	with open(logfile, "a") as file1:
-		nowTime = nowTime = datetime.datetime.now()
+		nowTime = datetime.datetime.now()
 		timeStr = str(nowTime)
 		file1.write(f"Measurements made at {timeStr} \n")
 
