@@ -1,0 +1,44 @@
+ERROR:root:
+Traceback (most recent call last):
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/geocoders/base.py", line 368, in _call_geocoder
+    result = self.adapter.get_json(url, timeout=timeout, headers=req_headers)
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/adapters.py", line 438, in get_json
+    resp = self._request(url, timeout=timeout, headers=headers)
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/adapters.py", line 466, in _request
+    raise AdapterHTTPError(
+geopy.adapters.AdapterHTTPError: Non-successful status code 403
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/kefecik/Desktop/Hydroponics/main.py", line 150, in <module>
+    location = geolocator.geocode(place)
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/geocoders/nominatim.py", line 297, in geocode
+    return self._call_geocoder(url, callback, timeout=timeout)
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/geocoders/base.py", line 388, in _call_geocoder
+    res = self._adapter_error_handler(error)
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/geocoders/base.py", line 411, in _adapter_error_handler
+    raise exc_cls(str(error)) from error
+geopy.exc.GeocoderInsufficientPrivileges: Non-successful status code 403
+ERROR:root:
+Traceback (most recent call last):
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/geocoders/base.py", line 368, in _call_geocoder
+    result = self.adapter.get_json(url, timeout=timeout, headers=req_headers)
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/adapters.py", line 438, in get_json
+    resp = self._request(url, timeout=timeout, headers=headers)
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/adapters.py", line 466, in _request
+    raise AdapterHTTPError(
+geopy.adapters.AdapterHTTPError: Non-successful status code 403
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/kefecik/Desktop/Hydroponics/main.py", line 150, in <module>
+    location = geolocator.geocode(place)
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/geocoders/nominatim.py", line 297, in geocode
+    return self._call_geocoder(url, callback, timeout=timeout)
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/geocoders/base.py", line 388, in _call_geocoder
+    res = self._adapter_error_handler(error)
+  File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/geocoders/base.py", line 411, in _adapter_error_handler
+    raise exc_cls(str(error)) from error
+geopy.exc.GeocoderInsufficientPrivileges: Non-successful status code 403
