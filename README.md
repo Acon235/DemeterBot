@@ -1,5 +1,4 @@
 TODO:
-add config file
-improve log file
-better exception handling
-separate logic from setup
+better exception handling,
+make a class PlantController and restructure code accordingly,
+
