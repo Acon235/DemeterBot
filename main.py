@@ -6,7 +6,7 @@ import datetime
 import logging
 
 from suntime import Sun
-from geopy.geocoders import Nominatim
+from geopy.geocoders import Photon
 
 
 
@@ -144,7 +144,7 @@ if __name__ == "__main__":
 		gpio.setup(stopButtonPin, gpio.IN, pull_up_down=gpio.PUD_DOWN)
 	
 		# Get the sunset and sunrise info
-		geolocator = Nominatim(user_agent="geoapiExercises")
+		geolocator = Photon(user_agent="geoapiExercises")
 	
 		place = "Saint Louis"
 		location = geolocator.geocode(place)

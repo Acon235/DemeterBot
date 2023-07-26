@@ -42,3 +42,10 @@ Traceback (most recent call last):
   File "/home/kefecik/.local/lib/python3.9/site-packages/geopy/geocoders/base.py", line 411, in _adapter_error_handler
     raise exc_cls(str(error)) from error
 geopy.exc.GeocoderInsufficientPrivileges: Non-successful status code 403
+ERROR:root:
+Traceback (most recent call last):
+  File "/home/kefecik/Desktop/Hydroponics/main.py", line 163, in <module>
+    systemCheck(lightPin, waterPin)
+  File "/home/kefecik/Desktop/Hydroponics/main.py", line 85, in systemCheck
+    time.sleep(30)
+KeyboardInterrupt
