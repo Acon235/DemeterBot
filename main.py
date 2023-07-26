@@ -6,7 +6,7 @@ import logging
 import configparser
 
 from suntime import Sun
-from geopy.geocoders import Nominatim
+from geopy.geocoders import Photon
 
 '''TODO LIST
 -add ph, temperature (air, water), ec monitoring
@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
         # Parse location data.
         place = config.get('LocationSettings', 'place')
-        geolocator = Nominatim(user_agent="geoapiExercises")
+        geolocator = Photon(user_agent="geoapiExercises")
         location = geolocator.geocode(place)
         sun = Sun(location.latitude, location.longitude)
 
