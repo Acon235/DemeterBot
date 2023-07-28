@@ -206,7 +206,7 @@ if __name__ == "__main__":
         # Set up the scheduling
         schedule.every().day.at("23:45").do(plant.update_light_schedule).tag("light_update_task")
         schedule.every(plant.pump_cycle_time).hours.do(plant.pump_on).tag("pump_on_task")
-        schedule.every(plant.measure_interval).minutes.do(plant.log_measurements).tag("measurement_task")
+        schedule.every(plant.measure_interval).minutes.do(plant.read_sensors).tag("measurement_task")
 
         while True:
             schedule.run_pending()
