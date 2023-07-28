@@ -49,3 +49,5 @@ Traceback (most recent call last):
   File "/home/kefecik/Desktop/Hydroponics/main.py", line 85, in systemCheck
     time.sleep(30)
 KeyboardInterrupt
+WARNING:urllib3.connectionpool:Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='photon.komoot.io', port=443): Read timed out. (read timeout=1)")': /api?q=Saint+Louis&limit=1
+Program started at 2023-07-27 13:58:35.621837 
