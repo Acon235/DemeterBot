@@ -5,6 +5,7 @@ import datetime
 import logging
 import configparser as cp
 import Adafruit_DHT
+import glob
 
 from suntime import Sun
 from geopy.geocoders import Photon
@@ -48,13 +49,16 @@ class PlantController:
             self.water_pin = config.getint('GPIOSettings', 'waterPin')
             self.stop_button_pin = config.getint('GPIOSettings', 'stopButtonPin')
             self.humidity_pin = config.getint('GPIOSettings', 'humidityPin')
+            self.water_temp_pin = config.getint('GPIOSettings', 'waterTempPin')
 
             self.humidity_sensor = Adafruit_DHT.DHT11
+            self.water_temp_sensor_serial = config.get('SensorSettings', 'waterTempSensorSerial')
 
             gpio.setup(self.light_pin, gpio.OUT, initial=gpio.LOW)
             gpio.setup(self.water_pin, gpio.OUT, initial=gpio.LOW)
             gpio.setup(self.stop_button_pin, gpio.IN, pull_up_down=gpio.PUD_DOWN)
             gpio.setup(self.humidity_pin, gpio.IN)
+            gpio.setup(self.water_temp_pin, gpio.IN)
 
             self.light_on_time = None
             self.light_off_time = None
@@ -143,8 +147,30 @@ class PlantController:
             self.log_message("Failed to retrieve data from humidity sensor")
             return None, None  # Return None if reading fails
 
+    def read_water_temp(self):
+        base_dir = '/sys/bus/w1/devices/'
+        device_folder = base_dir + self.water_temp_sensor_serial
+        device_file = device_folder + '/w1_slave'
+
+        def read_temp_raw():
+            f = open(device_file, 'r')
+            lines = f.readlines()
+            f.close()
+            return lines
+
+        lines = read_temp_raw()
+        while lines[0].strip()[-3:] != 'YES':
+            time.sleep(0.2)
+            lines = read_temp_raw()
+        equals_pos = lines[1].find('t=')
+        if equals_pos != -1:
+            temp_string = lines[1][equals_pos + 2:]
+            temp_c = float(temp_string) / 1000.0
+            return temp_c
+
     def read_sensors(self):
         air_temperature, humidity = self.read_temperature_and_humidity()
+        water_temp = self.read_water_temp()
 
         # Placeholder sensor readings, replace with actual sensor readings
         # ph = self.ph_sensor.read()
@@ -157,9 +183,9 @@ class PlantController:
         #         #
         #         # return {'ph': ph, 'ec': ec, 'air_temp': air_temperature, 'water_level': water_level, 'humidity': humidity}
 
-        self.log_message(f"Air temp: {air_temperature} Humidity: {humidity}")
+        self.log_message(f"Water temp: {water_temp} Air temp: {air_temperature} Humidity: {humidity}")
         self.log_message(f"Sensors read")
-        return {'air_temp': air_temperature, 'humidity': humidity}
+        return {'water_temp': water_temp, 'air_temperature': air_temperature, 'humidity': humidity}
 
     def system_check(self):
         gpio.output(self.light_pin, gpio.HIGH)
@@ -170,6 +196,7 @@ class PlantController:
         time.sleep(10)
         gpio.output(self.light_pin, gpio.LOW)
         time.sleep(2)
+        self.read_sensors()
 
     def startup(self):
         # check time and turn on/off the lights start the log
