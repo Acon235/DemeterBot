@@ -4,6 +4,7 @@ import schedule
 import datetime
 import logging
 import configparser as cp
+import Adafruit_DHT
 
 from suntime import Sun
 from geopy.geocoders import Photon
@@ -46,10 +47,14 @@ class PlantController:
             self.light_pin = config.getint('GPIOSettings', 'lightPin')
             self.water_pin = config.getint('GPIOSettings', 'waterPin')
             self.stop_button_pin = config.getint('GPIOSettings', 'stopButtonPin')
+            self.humidity_pin = config.getint('GPIOSettings', 'humidityPin')
+
+            self.humidity_sensor = Adafruit_DHT.DHT11
 
             gpio.setup(self.light_pin, gpio.OUT, initial=gpio.LOW)
             gpio.setup(self.water_pin, gpio.OUT, initial=gpio.LOW)
             gpio.setup(self.stop_button_pin, gpio.IN, pull_up_down=gpio.PUD_DOWN)
+            gpio.setup(self.humidity_pin, gpio.IN)
 
             self.light_on_time = None
             self.light_off_time = None
@@ -127,6 +132,34 @@ class PlantController:
         # turn pump off and log
         gpio.output(self.water_pin, gpio.LOW)
         self.log_message("Pump turned off")
+
+    def read_temperature_and_humidity(self):
+
+        humidity, air_temperature = Adafruit_DHT.read_retry(self.humidity_sensor, self.humidity_pin)
+
+        if humidity is not None and air_temperature is not None:
+            return air_temperature, humidity
+        else:
+            self.log_message("Failed to retrieve data from humidity sensor")
+            return None, None  # Return None if reading fails
+
+    def read_sensors(self):
+        air_temperature, humidity = self.read_temperature_and_humidity()
+
+        # Placeholder sensor readings, replace with actual sensor readings
+        # ph = self.ph_sensor.read()
+        # ec = self.ec_sensor.read()
+        # water_level = self.water_level_sensor.read()
+
+        # Log the raw sensor readings
+        # self.log_message(
+        #         #     f"PH: {ph} EC: {ec} Air temp: {air_temperature} Water level: {water_level} Humidity: {humidity}")
+        #         #
+        #         # return {'ph': ph, 'ec': ec, 'air_temp': air_temperature, 'water_level': water_level, 'humidity': humidity}
+
+        self.log_message(f"Air temp: {air_temperature} Humidity: {humidity}")
+        self.log_message(f"Sensors read")
+        return {'air_temp': air_temperature, 'humidity': humidity}
 
     def system_check(self):
         gpio.output(self.light_pin, gpio.HIGH)
