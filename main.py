@@ -1,17 +1,17 @@
-
 import RPi.GPIO as gpio
 import time
 import schedule
 import datetime
 import logging
+import configparser as cp
+import Adafruit_DHT
+import glob
 
 from suntime import Sun
 from geopy.geocoders import Photon
 
-
-
 '''TODO LIST
--add ph, temperature (air, water), ec monitoring/logging
+-add ph, temperature (air, water), ec monitoring
 -add logged values to some server
 
 -add server interaction with mobile client and rpi as backend
@@ -19,177 +19,235 @@ from geopy.geocoders import Photon
 
 '''
 
-def lightOn(lightPin, logfile):
-	# turn lights on, log on file, update suntimes for tomorrow
-	gpio.output(lightPin, gpio.HIGH)
-	with open(logfile, "a") as file1:
-		nowTime = datetime.datetime.now()
-		timeStr = str(nowTime)
-		file1.write(f"Lights turned on at {timeStr} \n")
 
+class PlantController:
+    def __init__(self, config_file='config.ini'):
+        # Parse the configuration file
+        config = cp.ConfigParser()
 
-def lightOff(lightPin, logfile):
-	# turn lights off, log on file
-	gpio.output(lightPin, gpio.LOW)
-	with open(logfile, "a") as file1:
-		nowTime = datetime.datetime.now()
-		timeStr = str(nowTime)
-		file1.write(f"Lights turned off at {timeStr} \n")
+        try:
+            config.read(config_file)
+        except cp.MissingSectionHeaderError:
+            raise ValueError(f"{config_file} is not a valid config file")
+        except cp.ParsingError:
+            raise ValueError(f"Could not parse {config_file}")
 
+        # Setup GPIO pins
+        gpio.setmode(gpio.BCM)
 
-def lightScheduleUpdate(sun, lightPin, timeZone, logfile):
-	timeAfterSunrise = 2
-	timeBeforeSunset = 2
-	sunRise = sun.get_local_sunrise_time(timeZone)
-	sunSet = sun.get_local_sunset_time(timeZone)
-	lightOnTime = sunSet - datetime.timedelta(hours=timeBeforeSunset)
-	lightOffTime = sunRise + datetime.timedelta(hours=timeAfterSunrise)
-	
-	schedule.clear('light_task')
-	
-	lightOnJob = schedule.every().day.at(f"{lightOnTime.hour:02}:{lightOnTime.minute:02}").do(lightOn, lightPin, logfile).tag("light_task")
-	lightOffJob = schedule.every().day.at(f"{lightOffTime.hour:02}:{lightOffTime.minute:02}").do(lightOff, lightPin, logfile).tag("light_task")
-	
-	with open(logfile, "a") as file1:
-		nowTime = datetime.datetime.now()
-		timeStr = str(nowTime)
-		file1.write(f"Sun times updated at {timeStr} \n")
+        try:
+            # Assign values from the config file to the attributes
+            self.time_after_sunrise = config.getint('TimeSettings', 'timeAfterSunrise')  # number of hours
+            self.time_before_sunset = config.getint('TimeSettings', 'timeBeforeSunset')  # number of hours
 
+            self.pump_cycle_time = config.getint('PumpSettings', 'pumpCycleTime')  # number of hours between pump cycles
+            self.pump_on_interval = config.getint('PumpSettings', 'pumpOnInterval')  # number of minutes pump stays on
 
-def pumpOn(pumpOnInterval, waterPin, logfile):
-	# turn pump on, schedule pump off in pumpOnInterval mins, log
-	
-	pumpOffJob = schedule.every(pumpOnInterval).minutes.do(pumpOff, waterPin, logfile).tag("pump_off_task")
-	
-	gpio.output(waterPin, gpio.HIGH)
-	with open(logfile, "a") as file1:
-		nowTime = datetime.datetime.now()
-		timeStr = str(nowTime)
-		file1.write(f"Pump turned on at {timeStr} \n")
+            self.measure_interval = config.getint('MeasurementSettings', 'measureInterval')  # minutes between measurements
 
-def pumpOff(waterPin, logfile):
-	schedule.clear('pump_off_task')
-	
-	gpio.output(waterPin, gpio.LOW)
-	with open(logfile, "a") as file1:
-		nowTime = datetime.datetime.now()
-		timeStr = str(nowTime)
-		file1.write(f"Pump turned off at {timeStr} \n")
+            self.light_pin = config.getint('GPIOSettings', 'lightPin')
+            self.water_pin = config.getint('GPIOSettings', 'waterPin')
+            self.stop_button_pin = config.getint('GPIOSettings', 'stopButtonPin')
+            self.humidity_pin = config.getint('GPIOSettings', 'humidityPin')
+            self.water_temp_pin = config.getint('GPIOSettings', 'waterTempPin')
 
+            self.humidity_sensor = Adafruit_DHT.DHT11
+            self.water_temp_sensor_serial = config.get('SensorSettings', 'waterTempSensorSerial')
 
-def systemCheck(lightPin, waterPin):
-	
-	gpio.output(lightPin, gpio.HIGH)
-	time.sleep(5)
-	gpio.output(waterPin, gpio.HIGH)
-	time.sleep(30)
-	gpio.output(waterPin, gpio.LOW)
-	time.sleep(10)
-	gpio.output(lightPin, gpio.LOW)
-	time.sleep(2)
+            gpio.setup(self.light_pin, gpio.OUT, initial=gpio.LOW)
+            gpio.setup(self.water_pin, gpio.OUT, initial=gpio.LOW)
+            gpio.setup(self.stop_button_pin, gpio.IN, pull_up_down=gpio.PUD_DOWN)
+            gpio.setup(self.humidity_pin, gpio.IN)
+            gpio.setup(self.water_temp_pin, gpio.IN)
 
+            self.light_on_time = None
+            self.light_off_time = None
 
-def startup(lightPin, lightOnTime, lightOffTime, logfile):
-	#check time and turn on/off the lights start the log
-	nowTime = datetime.datetime.now()
-	action = 0
-	
-	if ((nowTime.hour > lightOnTime.hour) or (nowTime.hour < lightOffTime.hour)):
-		if((nowTime.minute > lightOnTime.minute) or (nowTime.minute < lightOffTime.minute)):
-			gpio.output(lightPin, gpio.HIGH)
-			action = 1
+            self.logfile = config.get('GeneralSettings', 'logfile')
 
-	with open(logfile, "a") as file1:
-		timeStr = str(nowTime)
-		file1.write(f"Program started at {timeStr} \n")
-		if action:
-			file1.write(f"Lights turned on at {timeStr} \n")
-	
+            # Get location from the config file
+            place = config.get('LocationSettings', 'place')
 
-def measurements(logfile):
-	# do temp, ph, ec measurements and log
-	with open(logfile, "a") as file1:
-		nowTime = datetime.datetime.now()
-		timeStr = str(nowTime)
-		file1.write(f"Measurements made at {timeStr} \n")
+            # Get the sunset and sunrise info
+            geolocator = Photon(user_agent="geoapiExercises")
+            location = geolocator.geocode(place)
 
+            latitude = location.latitude
+            longitude = location.longitude
+            self.sun = Sun(latitude, longitude)
+
+            self.time_zone = datetime.date.today()
+
+        except cp.NoSectionError as e:
+            raise ValueError(f"Missing section in {config_file}: {e}")
+        except cp.NoOptionError as e:
+            raise ValueError(f"Missing key in {config_file}: {e}")
+
+        # Setup the logger
+        logging.basicConfig(filename=self.logfile)
+
+    def log_message(self, message):
+        with open(self.logfile, "a") as file:
+            time_str = str(datetime.datetime.now())
+            file.write(f"{time_str}: {message}\n")
+
+    def light_on(self):
+        # Turn lights on, log on file
+        gpio.output(self.light_pin, gpio.HIGH)
+        self.log_message("Lights turned on")
+
+    def light_off(self):
+        # Turn lights off, log on file
+        gpio.output(self.light_pin, gpio.LOW)
+        self.log_message("Lights turned off")
+
+    def update_light_schedule(self):
+        sun_rise = self.sun.get_local_sunrise_time(self.time_zone)
+        sun_set = self.sun.get_local_sunset_time(self.time_zone)
+
+        # Compute the light-on and light-off times.
+        self.light_on_time = sun_set - datetime.timedelta(hours=self.time_before_sunset)
+        self.light_off_time = sun_rise + datetime.timedelta(hours=self.time_after_sunrise)
+
+        # Clear the previous light tasks.
+        schedule.clear('light_task')
+
+        # Setting a new schedule for turning the light on and off.
+        schedule.every().day.at(self.light_on_time.strftime('%H:%M')).do(self.light_on).tag('light_task')
+        schedule.every().day.at(self.light_off_time.strftime('%H:%M')).do(self.light_off).tag('light_task')
+
+        self.log_message("Sun times updated")
+
+    def pump_on(self):
+        # Clear any existing pump_off tasks
+        schedule.clear('pump_off_task')
+
+        # Schedule pump off in pump_on_interval minutes
+        schedule.every(self.pump_on_interval).minutes.do(self.pump_off).tag('pump_off_task')
+
+        # Turn pump on and log
+        gpio.output(self.water_pin, gpio.HIGH)
+        self.log_message("Pump turned on")
+
+    def pump_off(self):
+        # clear the pump_off task
+        schedule.clear('pump_off_task')
+
+        # turn pump off and log
+        gpio.output(self.water_pin, gpio.LOW)
+        self.log_message("Pump turned off")
+
+    def read_temperature_and_humidity(self):
+
+        humidity, air_temperature = Adafruit_DHT.read_retry(self.humidity_sensor, self.humidity_pin)
+
+        if humidity is not None and air_temperature is not None:
+            return air_temperature, humidity
+        else:
+            self.log_message("Failed to retrieve data from humidity sensor")
+            return None, None  # Return None if reading fails
+
+    def read_water_temp(self):
+        base_dir = '/sys/bus/w1/devices/'
+        device_folder = base_dir + self.water_temp_sensor_serial
+        device_file = device_folder + '/w1_slave'
+
+        def read_temp_raw():
+            f = open(device_file, 'r')
+            lines = f.readlines()
+            f.close()
+            return lines
+
+        lines = read_temp_raw()
+        while lines[0].strip()[-3:] != 'YES':
+            time.sleep(0.2)
+            lines = read_temp_raw()
+        equals_pos = lines[1].find('t=')
+        if equals_pos != -1:
+            temp_string = lines[1][equals_pos + 2:]
+            temp_c = float(temp_string) / 1000.0
+            return temp_c
+
+    def read_sensors(self):
+        air_temperature, humidity = self.read_temperature_and_humidity()
+        water_temp = self.read_water_temp()
+
+        # Placeholder sensor readings, replace with actual sensor readings
+        # ph = self.ph_sensor.read()
+        # ec = self.ec_sensor.read()
+        # water_level = self.water_level_sensor.read()
+
+        # Log the raw sensor readings
+        # self.log_message(
+        #         #     f"PH: {ph} EC: {ec} Air temp: {air_temperature} Water level: {water_level} Humidity: {humidity}")
+        #         #
+        #         # return {'ph': ph, 'ec': ec, 'air_temp': air_temperature, 'water_level': water_level, 'humidity': humidity}
+
+        self.log_message(f"Water temp: {water_temp} Air temp: {air_temperature} Humidity: {humidity}")
+        self.log_message(f"Sensors read")
+        return {'water_temp': water_temp, 'air_temperature': air_temperature, 'humidity': humidity}
+
+    def system_check(self):
+        gpio.output(self.light_pin, gpio.HIGH)
+        time.sleep(5)
+        gpio.output(self.water_pin, gpio.HIGH)
+        time.sleep(30)
+        gpio.output(self.water_pin, gpio.LOW)
+        time.sleep(10)
+        gpio.output(self.light_pin, gpio.LOW)
+        time.sleep(2)
+        self.read_sensors()
+
+    def startup(self):
+        # check time and turn on/off the lights start the log
+        now_time = datetime.datetime.now()
+
+        # creating datetime objects for light_on_time and light_off_time
+        light_on_datetime = now_time.replace(hour=self.light_on_time.hour, minute=self.light_on_time.minute)
+        light_off_datetime = now_time.replace(hour=self.light_off_time.hour, minute=self.light_off_time.minute)
+
+        # If current time is within light_on and light_off time, turn the light on
+        if light_on_datetime <= now_time <= light_off_datetime:
+            gpio.output(self.light_pin, gpio.HIGH)
+            self.log_message("Lights turned on")
+
+        self.log_message("Program started")
+
+    def log_measurements(self):
+        # do temp, ph, ec measurements and log
+        self.log_message("Measurements made")
 
 
 if __name__ == "__main__":
-	
-	try:
-		
-		
-		timeAfterSunrise = 2 # number of hours
-		timeBeforeSunset = 2 # number of hours 
-	
-		pumpCycleTime = 3 # number of hours between pump turn ons
-		pumpOnInterval = 30 # number of minutes pump stays on every pumpCycleTime hours
-	
-		measureInterval = 60 # number of minutes between measurements
-	
-		lightPin = 23
-		waterPin = 24
-		stopButtonPin = 25
-		
-	
-		logfile = "./Data/logfile.txt"
-		logging.basicConfig(filename=logfile)
-		
-		# Setup GPIO pins
-		
-		gpio.setmode(gpio.BCM)
-		gpio.setup(lightPin, gpio.OUT, initial=gpio.LOW)
-		gpio.setup(waterPin, gpio.OUT, initial=gpio.LOW)
-		gpio.setup(stopButtonPin, gpio.IN, pull_up_down=gpio.PUD_DOWN)
-	
-		# Get the sunset and sunrise info
-		geolocator = Photon(user_agent="geoapiExercises")
-	
-		place = "Saint Louis"
-		location = geolocator.geocode(place)
-	
-		latitude = location.latitude
-		longitude = location.longitude
-		sun = Sun(latitude, longitude)
-	
-		timeZone = datetime.date.today()
-		sunRise = sun.get_local_sunrise_time(timeZone)
-		sunSet = sun.get_local_sunset_time(timeZone)
-	
-		lightOnTime = sunSet - datetime.timedelta(hours=timeBeforeSunset)
-		lightOffTime = sunRise + datetime.timedelta(hours=timeAfterSunrise)
-	
-		systemCheck(lightPin, waterPin)
-		startup(lightPin, lightOnTime, lightOffTime, logfile)
-	
-		# Set up the scheduling
-	
-		lightOnJob = schedule.every().day.at(f"{lightOnTime.hour:02}:{lightOnTime.minute:02}").do(lightOn, lightPin, logfile).tag("light_task")
-		lightOffJob = schedule.every().day.at(f"{lightOffTime.hour:02}:{lightOffTime.minute:02}").do(lightOff, lightPin, logfile).tag("light_task")
-	
-		lightUpdateJob = schedule.every().day.at("23:45").do(lightScheduleUpdate, sun, lightPin, timeZone, logfile).tag("light_update_task")
-	
-		pumpOnJob = schedule.every(pumpCycleTime).hours.do(pumpOn, pumpOnInterval, waterPin, logfile).tag("pump_on_task")
-	
-		measureJob = schedule.every(measureInterval).minutes.do(measurements, logfile).tag("measurement_task")
-	
-	
-	
-		while True:
-			schedule.run_pending()
-			time.sleep(1)
-			if gpio.input(stopButtonPin):
-				break
-		
-	except:
-		
-		logging.exception('')
-	
-	finally:
-		
-		gpio.output(lightPin, gpio.LOW)
-		gpio.output(waterPin, gpio.LOW)
-		gpio.cleanup()
-		schedule.clear()
-		
+
+    plant = None
+
+    try:
+        # Initialize the plant controller with the config file.
+        plant = PlantController('config.ini')
+
+        # Perform system check and startup.
+        plant.system_check()
+        plant.update_light_schedule()
+
+        # Set up the scheduling
+        schedule.every().day.at("23:45").do(plant.update_light_schedule).tag("light_update_task")
+        schedule.every(plant.pump_cycle_time).hours.do(plant.pump_on).tag("pump_on_task")
+        schedule.every(plant.measure_interval).minutes.do(plant.read_sensors).tag("measurement_task")
+
+        while True:
+            schedule.run_pending()
+            time.sleep(1)
+            if gpio.input(plant.stop_button_pin):
+                break
+
+    except Exception as exc:
+        logging.exception('Error occurred: %s', exc)
+
+    finally:
+        if plant is not None:
+            gpio.output(plant.light_pin, gpio.LOW)
+            gpio.output(plant.water_pin, gpio.LOW)
+
+        gpio.cleanup()
+        schedule.clear()
